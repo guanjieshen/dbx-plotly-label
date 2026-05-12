@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import os
+import time
 import uuid
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request
@@ -7,9 +10,29 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from backend.auth import get_user_email
-from backend.db import execute, fq, get_calibration, get_graph_info, query, volume_read
+from backend.db import (
+    UC_CATALOG,
+    UC_SCHEMA,
+    UC_VOLUME_PATH,
+    execute,
+    fq,
+    get_calibration,
+    get_graph_info,
+    list_volume_images,
+    query,
+    volume_read,
+)
+
+log = logging.getLogger("eval-labelling.graphs")
 
 router = APIRouter()
+
+# Module-level cache for the volume walk. Walking a UC volume calls the Files
+# API once per directory — fine for ten files, slow for thousands. We cache the
+# result for AUTO_SCAN_TTL seconds so rapid back-to-back `/api/graphs` calls
+# (boot, then after Submit) don't re-walk every time.
+_AUTO_SCAN_TTL_S = float(os.environ.get("EVAL_AUTO_SCAN_TTL", "30"))
+_last_scan_at: float = 0.0
 
 
 class ChartCommentCreate(BaseModel):
@@ -17,8 +40,70 @@ class ChartCommentCreate(BaseModel):
     parent_comment_id: str | None = None
 
 
+def _auto_scan_volume() -> int:
+    """Best-effort: walk the configured volume, INSERT any new image paths
+    into `graphs` with status='unlabelled'. Returns the count of new rows.
+
+    Gated by env `EVAL_AUTO_SCAN` (set to "0" to disable). Caches the walk
+    for EVAL_AUTO_SCAN_TTL seconds to avoid hammering the Files API.
+    """
+    global _last_scan_at
+    if os.environ.get("EVAL_AUTO_SCAN", "1") == "0":
+        return 0
+    now = time.time()
+    if now - _last_scan_at < _AUTO_SCAN_TTL_S:
+        return 0
+    _last_scan_at = now
+    try:
+        images = list_volume_images(UC_VOLUME_PATH)
+    except Exception as e:
+        log.warning("auto_scan: volume walk failed: %s", e)
+        return 0
+    if not images:
+        return 0
+    prefix = UC_VOLUME_PATH.rstrip("/") + "/"
+    try:
+        existing_rows = query(
+            f"SELECT graph_path FROM {fq('graphs')} WHERE graph_path LIKE :prefix",
+            {"prefix": prefix + "%"},
+        )
+    except Exception as e:
+        log.warning("auto_scan: existing query failed: %s", e)
+        return 0
+    existing = {r["graph_path"] for r in existing_rows if r.get("graph_path")}
+    new_paths = [p for p in images if p not in existing]
+    if not new_paths:
+        return 0
+    # New rows get metadata.data_table pointing at the default chart_points
+    # location (catalog.schema.chart_points). Upstream pipelines that want
+    # a different source can UPDATE later.
+    data_table = f"{UC_CATALOG}.{UC_SCHEMA}.chart_points"
+    rows_sql: list[str] = []
+    params: dict = {"dt": data_table}
+    for i, p in enumerate(new_paths):
+        params[f"p{i}"] = p
+        rows_sql.append(
+            f"(:p{i}, 'unlabelled', NULL, NULL, NULL, "
+            "current_timestamp(), map('data_table', :dt))"
+        )
+    try:
+        execute(
+            f"INSERT INTO {fq('graphs')} "
+            "(graph_path, status, assignee_email, completed_by, completed_at, "
+            "created_at, metadata) VALUES " + ", ".join(rows_sql),
+            params,
+        )
+    except Exception as e:
+        log.warning("auto_scan: insert failed: %s", e)
+        return 0
+    log.info("auto_scan: inserted %d new graph rows", len(new_paths))
+    return len(new_paths)
+
+
 @router.get("")
 def list_graphs(status: str | None = Query(default=None)):
+    # Auto-discover new files on every list (cached for ~30s).
+    _auto_scan_volume()
     sql = f"SELECT graph_path, status, assignee_email, completed_by, completed_at, created_at FROM {fq('graphs')}"
     params: dict = {}
     if status:

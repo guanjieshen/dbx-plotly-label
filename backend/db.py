@@ -143,6 +143,38 @@ def volume_read(path: str) -> bytes:
     return resp.contents.read()
 
 
+# Image file extensions the app understands. Kept in sync with bin/_scan_volume.py
+# and the supported list in the README.
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}
+
+
+def list_volume_images(volume_root: str) -> list[str]:
+    """Recursively list every image-extension file under a UC volume root.
+
+    Used by `/api/graphs` to auto-discover new files at boot, and by
+    `/api/volume/search` for the search box in the volume browser.
+    """
+    found: list[str] = []
+    stack = [volume_root.rstrip("/")]
+    while stack:
+        cur = stack.pop()
+        try:
+            entries = volume_list(cur)
+        except Exception:
+            continue
+        for e in entries:
+            full = e.get("path") or ""
+            if not full:
+                continue
+            if e.get("is_dir"):
+                stack.append(full.rstrip("/"))
+                continue
+            lower = full.lower()
+            if any(lower.endswith(ext) for ext in IMAGE_EXTS):
+                found.append(full)
+    return found
+
+
 # ---------------------------------------------------------------------------
 # Calibration & box → data snapshot helpers.
 # A chart's `graphs.metadata` MAP carries axis ranges + plot-area pixel bbox.

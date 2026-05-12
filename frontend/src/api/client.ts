@@ -225,8 +225,30 @@ export const api = {
     }),
 
   volumeTree: (path?: string) =>
-    http<{ path: string; entries: { name: string; path: string; is_dir: boolean; size: number }[] }>(
-      `/api/volume/tree${path ? `?path=${encodeURIComponent(path)}` : ''}`,
+    http<{
+      path: string;
+      entries: {
+        name: string;
+        path: string;
+        is_dir: boolean;
+        size: number;
+        status?: string | null;
+      }[];
+    }>(`/api/volume/tree${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+
+  volumeSearch: (q: string, limit = 200) =>
+    http<{
+      query: string;
+      count: number;
+      entries: {
+        name: string;
+        path: string;
+        is_dir: false;
+        size: number;
+        status?: string | null;
+      }[];
+    }>(
+      `/api/volume/search?q=${encodeURIComponent(q)}&limit=${limit}`,
     ),
 };
 
