@@ -415,6 +415,21 @@ run_sql_idem() {
   return 1
 }
 
+# Render app.yaml from the template with the user's chosen values. Apps
+# deploy reads app.yaml from $SOURCE_CODE_PATH, so it must be in the synced
+# tree (and on disk for the in-workspace path).
+TEMPLATE="$REPO_ROOT/app.yaml.template"
+if [[ -f "$TEMPLATE" ]]; then
+  IMAGE_VOL_FQN="$IMAGE_CAT.$IMAGE_SCH.$IMAGE_VOL"
+  sed -e "s|{{WAREHOUSE_ID}}|$WAREHOUSE_ID|g" \
+      -e "s|{{UC_CATALOG}}|$ANN_CAT|g" \
+      -e "s|{{UC_SCHEMA}}|$ANN_SCH|g" \
+      -e "s|{{UC_VOLUME_PATH}}|$VOLUME_PATH|g" \
+      -e "s|{{IMAGE_VOLUME_FQN}}|$IMAGE_VOL_FQN|g" \
+      -e "s|{{ANN_SCHEMA_FQN}}|$ANN_CAT.$ANN_SCH|g" \
+      "$TEMPLATE" > "$REPO_ROOT/app.yaml"
+fi
+
 # ---- Step 1: schema + volume (resources) ----------------------------------
 echo
 if [[ "$SKIP_RESOURCE_CREATE" -eq 0 ]]; then
@@ -444,8 +459,12 @@ elif [[ ! -f "$DDL_FILE" ]]; then
   step_warn "sql/ddl.sql missing"
 else
   TABLE_OK=0; TABLE_BAD=0
-  while IFS= read -r STMT; do
-    STMT_TRIM="$(echo "$STMT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  # Split the DDL on `;` keeping multi-line statements intact. We use null
+  # bytes as the record separator on output so the `read` loop never breaks
+  # a CREATE TABLE across lines.
+  while IFS= read -r -d '' STMT; do
+    # Strip SQL line comments + leading/trailing whitespace.
+    STMT_TRIM="$(printf '%s' "$STMT" | sed -e 's/--[^\n]*//g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     [[ -z "$STMT_TRIM" ]] && continue
     STMT_TRIM="${STMT_TRIM//\{\{CATALOG\}\}/$ANN_CAT}"
     STMT_TRIM="${STMT_TRIM//\{\{SCHEMA\}\}/$ANN_SCH}"
@@ -454,7 +473,7 @@ else
     else
       TABLE_BAD=$((TABLE_BAD+1))
     fi
-  done < <(awk 'BEGIN{RS=";"} {print $0}' "$DDL_FILE")
+  done < <(awk 'BEGIN{RS=";"; ORS="\0"} {print $0}' "$DDL_FILE")
   if [[ "$TABLE_BAD" -eq 0 ]]; then
     step_ok "$TABLE_OK statements"
   else
@@ -576,6 +595,49 @@ while :; do
   fi
   sleep 8
 done
+
+# ---- Grant the app's SP what it needs on UC -------------------------------
+# UC objects (catalog/schema/volume/table) are not yet first-class resources
+# in app.yaml, so the SP starts a fresh deploy with zero UC grants. We grant
+# the minimum to read the volume and read+write the annotation tables.
+# Idempotent: re-runs grant the same privileges silently.
+APP_SP="$($DB apps get "$APP_NAME" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("service_principal_client_id",""))')"
+if [[ -n "$APP_SP" ]]; then
+  echo
+  echo "${C_BOLD}Granting Unity Catalog access to the app's service principal${C_RESET}"
+  echo "${C_DIM}  sp=$APP_SP${C_RESET}"
+  TABLES=("graphs" "annotations" "comments" "chart_points" "annotation_data_points")
+  GRANTS=(
+    "GRANT USE CATALOG ON CATALOG \`$IMAGE_CAT\` TO \`$APP_SP\`"
+    "GRANT READ VOLUME ON VOLUME \`$IMAGE_CAT\`.\`$IMAGE_SCH\`.\`$IMAGE_VOL\` TO \`$APP_SP\`"
+    "GRANT USE CATALOG ON CATALOG \`$ANN_CAT\` TO \`$APP_SP\`"
+    "GRANT USE SCHEMA ON SCHEMA \`$ANN_CAT\`.\`$ANN_SCH\` TO \`$APP_SP\`"
+  )
+  for T in "${TABLES[@]}"; do
+    GRANTS+=("GRANT SELECT, MODIFY ON TABLE \`$ANN_CAT\`.\`$ANN_SCH\`.\`$T\` TO \`$APP_SP\`")
+  done
+  GRANT_FAILS=()
+  for G in "${GRANTS[@]}"; do
+    RESP="$(run_sql "$G")"
+    if echo "$RESP" | grep -q '"state":"SUCCEEDED"'; then
+      ok "$(echo "$G" | sed -E 's/GRANT (.+) TO.*/\1/')"
+    else
+      GRANT_FAILS+=("$G")
+      MSG="$(echo "$RESP" | python3 -c 'import sys,json; d=json.load(sys.stdin); print((d.get("status",{}).get("error",{}).get("message","") or "")[:120])' 2>/dev/null || echo "")"
+      warn "$(echo "$G" | sed -E 's/GRANT (.+) TO.*/\1/')  -- $MSG"
+    fi
+  done
+  if [[ "${#GRANT_FAILS[@]}" -gt 0 ]]; then
+    echo
+    warn "Some grants failed (likely because you don't own the catalog/schema)."
+    echo "  Ask an owner to run these as the catalog/schema admin:"
+    echo
+    for G in "${GRANT_FAILS[@]}"; do
+      echo "    $G;"
+    done
+    echo
+  fi
+fi
 
 # ---- App access (optional) ------------------------------------------------
 if [[ -n "$APP_GROUP" ]]; then

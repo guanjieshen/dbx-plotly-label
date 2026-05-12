@@ -27,5 +27,8 @@ yarn-error.log
 # Local deploy config (write-back from bin/deploy.sh)
 .deploy.yaml
 
+# Rendered per-install from app.yaml.template by bin/deploy.sh.
+app.yaml
+
 # Transient render artifacts from --seed-samples
 .deploy_tmp_samples/

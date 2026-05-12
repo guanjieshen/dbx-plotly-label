@@ -1,0 +1,33 @@
+command: ['uvicorn', 'backend.main:app', '--host', '0.0.0.0', '--port', '8000']
+
+# Declared Apps resources. The installer fills in the warehouse id from the
+# user's pick. UC objects (catalog/schema/volume) are not yet first-class
+# resources in app.yaml — the installer prints clear instructions for granting
+# the app's service principal the necessary UC permissions after deploy.
+resources:
+  - name: sql-warehouse
+    description: SQL warehouse used by the app for Delta reads and writes
+    sql_warehouse:
+      id: '{{WAREHOUSE_ID}}'
+      permission: CAN_USE
+
+# User-authorization scopes — used when the app needs to act on behalf of the
+# calling user (the backend currently uses service-principal M2M, so these
+# scopes are informational today but kept for forward compatibility).
+user_api_scopes:
+  - sql
+  - catalog.catalogs:read
+  - catalog.schemas:read
+  - catalog.tables:read
+
+env:
+  - name: 'DATABRICKS_WAREHOUSE_ID'
+    value: '{{WAREHOUSE_ID}}'
+  - name: 'UC_CATALOG'
+    value: '{{UC_CATALOG}}'
+  - name: 'UC_SCHEMA'
+    value: '{{UC_SCHEMA}}'
+  - name: 'UC_VOLUME_PATH'
+    value: '{{UC_VOLUME_PATH}}'
+  - name: 'PYTHONUNBUFFERED'
+    value: '1'
