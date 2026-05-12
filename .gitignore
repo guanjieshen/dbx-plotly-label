@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.pytest_cache/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log
+
+# Keep frontend/dist for deployment - DO NOT exclude
+# frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Databricks
+.databricks/
+
+# Local deploy config (write-back from bin/deploy.sh)
+.deploy.yaml
+
+# Transient render artifacts from --seed-samples
+.deploy_tmp_samples/

@@ -1,0 +1,13 @@
+command: ['uvicorn', 'backend.main:app', '--host', '0.0.0.0', '--port', '8000']
+
+env:
+  - name: 'DATABRICKS_WAREHOUSE_ID'
+    valueFrom: 'sql-warehouse'
+  - name: 'UC_CATALOG'
+    value: 'classic_stable_ccu63h'
+  - name: 'UC_SCHEMA'
+    value: 'eval_labelling'
+  - name: 'UC_VOLUME_PATH'
+    value: '/Volumes/classic_stable_ccu63h/eval_labelling/graphs'
+  - name: 'PYTHONUNBUFFERED'
+    value: '1'

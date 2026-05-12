@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide native scrollbar in panels */
+.scroll-soft::-webkit-scrollbar { width: 10px; height: 10px; }
+.scroll-soft::-webkit-scrollbar-track { background: transparent; }
+.scroll-soft::-webkit-scrollbar-thumb { background: #404040; border-radius: 6px; }
+.scroll-soft::-webkit-scrollbar-thumb:hover { background: #525252; }

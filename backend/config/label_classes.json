@@ -1,0 +1,6 @@
+[
+  {"id":"false_positive",  "name":"False Positive",  "color":"#ef4444", "description":"Model flagged a non-issue"},
+  {"id":"missed_anomaly",  "name":"Missed Anomaly",  "color":"#f59e0b", "description":"Model should have flagged this region"},
+  {"id":"chart_artifact",  "name":"Chart Artifact",  "color":"#a855f7", "description":"Rendering issue, not a model error"},
+  {"id":"custom",          "name":"Custom…",      "color":"#06b6d4", "description":"Free-form label entered per shape"}
+]

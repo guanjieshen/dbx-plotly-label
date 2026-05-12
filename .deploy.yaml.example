@@ -1,0 +1,11 @@
+# bin/deploy.sh reads this file (renamed to .deploy.yaml; gitignored).
+# Override any value via the interactive prompts on first run, or edit by hand.
+
+profile: adb-7405616713955568
+workspace_host: https://adb-7405616713955568.8.azuredatabricks.net
+catalog: classic_stable_ccu63h
+schema: eval_labelling
+volume_path: /Volumes/classic_stable_ccu63h/eval_labelling/graphs
+warehouse_id: 4c0d11615eda2d38
+app_name: eval-labelling
+source_code_path: /Workspace/Users/guanjie.shen@databricks.com/eval-labelling-app
