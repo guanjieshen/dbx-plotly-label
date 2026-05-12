@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Thin wrapper so users can run `./install` from the repo root.
+# Forwards every argument to bin/deploy.sh.
+exec "$(dirname "$0")/bin/deploy.sh" "$@"

@@ -380,6 +380,28 @@ export const useEditor = create<EditorState>()(
       // Persist only the buffer so a refresh doesn't lose draft work.
       // Everything else (tool, zoom, selected, panels) is transient.
       partialize: (s) => ({ buffersByGraph: s.buffersByGraph }),
+      // Defensive rehydration: state persisted before we added a field (e.g.
+      // chartComments) lacks it on load. We normalize every buffer here so
+      // downstream code can assume all arrays/maps exist. Without this,
+      // `buf.chartComments.map(...)` throws "Cannot read 'map' of undefined"
+      // and unmounts the whole tree.
+      merge: (persisted, current) => {
+        if (!persisted || typeof persisted !== 'object') return current;
+        const raw = (persisted as { buffersByGraph?: Record<string, Partial<GraphBuffer>> })
+          .buffersByGraph || {};
+        const normalised: Record<string, GraphBuffer> = {};
+        for (const k of Object.keys(raw)) {
+          const b = raw[k] || {};
+          normalised[k] = {
+            creates: b.creates || [],
+            updates: b.updates || {},
+            deletes: b.deletes || [],
+            comments: b.comments || [],
+            chartComments: b.chartComments || [],
+          };
+        }
+        return { ...current, buffersByGraph: normalised };
+      },
     },
   ),
 );

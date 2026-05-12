@@ -45,8 +45,8 @@ export function useMergedAnnotations(graphPath: string | null) {
     if (!buf) {
       return server.map((a) => ({ ...a, isUnsaved: false, hasPendingMutation: false }));
     }
-    const deletes = new Set(buf.deletes);
-    const updates = buf.updates;
+    const deletes = new Set(buf.deletes || []);
+    const updates = buf.updates || {};
     const merged: MergedAnnotation[] = [];
     for (const a of server) {
       if (deletes.has(a.annotation_id)) continue;
@@ -64,7 +64,7 @@ export function useMergedAnnotations(graphPath: string | null) {
       merged.push(next);
     }
     // Buffered creates appear as annotation rows with tmp ids.
-    for (const c of buf.creates) {
+    for (const c of (buf.creates || [])) {
       merged.push({
         annotation_id: c.client_id,
         graph_path: graphPath || '',
@@ -95,7 +95,7 @@ export function useMergedAnnotations(graphPath: string | null) {
       out[aid] = list.map((c) => ({ ...c, isUnsaved: false }));
     }
     if (buf) {
-      for (const c of buf.comments) {
+      for (const c of (buf.comments || [])) {
         const parent = c.parent_id;
         const local: Comment & { isUnsaved: boolean } = {
           comment_id: c.client_id,
@@ -115,7 +115,7 @@ export function useMergedAnnotations(graphPath: string | null) {
   const chartComments = useMemo<Array<Comment & { isUnsaved: boolean }>>(() => {
     const server = (q.data?.chart_comments || []).map((c) => ({ ...c, isUnsaved: false }));
     if (!buf) return server;
-    const local = buf.chartComments.map<Comment & { isUnsaved: boolean }>((c) => ({
+    const local = (buf.chartComments || []).map<Comment & { isUnsaved: boolean }>((c) => ({
       comment_id: c.client_id,
       annotation_id: null,
       parent_comment_id: c.parent_comment_id || null,

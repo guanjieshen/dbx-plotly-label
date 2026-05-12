@@ -176,4 +176,8 @@ def _mime_from(path: str) -> str:
         return "image/gif"
     if lower.endswith(".webp"):
         return "image/webp"
+    if lower.endswith(".bmp"):
+        return "image/bmp"
+    if lower.endswith(".svg"):
+        return "image/svg+xml"
     return "application/octet-stream"

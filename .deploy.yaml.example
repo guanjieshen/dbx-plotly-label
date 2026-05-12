@@ -1,11 +1,33 @@
-# bin/deploy.sh reads this file (renamed to .deploy.yaml; gitignored).
-# Override any value via the interactive prompts on first run, or edit by hand.
+# bin/deploy.sh / ./install reads this file (renamed to .deploy.yaml; gitignored).
+# Override interactively on first run, or edit by hand and use --non-interactive.
+#
+# When running from a Databricks workspace web terminal, leave `profile` empty —
+# the CLI picks up ambient cluster auth automatically.
 
 profile: adb-7405616713955568
 workspace_host: https://adb-7405616713955568.8.azuredatabricks.net
+warehouse_id: 4c0d11615eda2d38
+
+# Image volume — where your chart images (.png/.jpg/.gif/.webp/.bmp/.svg) live
+image_catalog: classic_stable_ccu63h
+image_schema: eval_labelling
+image_volume: graphs
+
+# Annotations & metadata location — where the app's Delta tables go.
+# Commonly the same as the image_* values above.
+annotations_catalog: classic_stable_ccu63h
+annotations_schema: eval_labelling
+
+# chart_points source table that powers box→data snapshots.
+# Defaults to <annotations_catalog>.<annotations_schema>.chart_points.
+chart_points_table: classic_stable_ccu63h.eval_labelling.chart_points
+
+# App
+app_name: eval-labelling
+app_access_group:
+source_code_path: /Workspace/Users/guanjie.shen@databricks.com/eval-labelling-app
+
+# Legacy keys (still read by older deploy.sh; new installer ignores).
 catalog: classic_stable_ccu63h
 schema: eval_labelling
 volume_path: /Volumes/classic_stable_ccu63h/eval_labelling/graphs
-warehouse_id: 4c0d11615eda2d38
-app_name: eval-labelling
-source_code_path: /Workspace/Users/guanjie.shen@databricks.com/eval-labelling-app
